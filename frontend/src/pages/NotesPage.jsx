@@ -88,12 +88,12 @@ const NotesPage = () => {
     filtered.sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
-      
+
       if (sortBy === 'title') {
         aValue = aValue.toLowerCase();
         bValue = bValue.toLowerCase();
       }
-      
+
       if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
@@ -242,7 +242,7 @@ const NotesPage = () => {
               onClear={() => setSearchTerm('')}
             />
           </div>
-          
+
           <div className="flex gap-2">
             <select
               value={selectedCourse}
@@ -256,7 +256,7 @@ const NotesPage = () => {
                 </option>
               ))}
             </select>
-            
+
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
@@ -266,7 +266,7 @@ const NotesPage = () => {
               <option value="title">Title</option>
               <option value="updated_at">Last Updated</option>
             </select>
-            
+
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
               className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -297,11 +297,11 @@ const NotesPage = () => {
             </div>
             <div className="flex items-center text-sm text-green-700">
               <CalendarIcon className="w-4 h-4 mr-1" />
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'short', 
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
               })}
             </div>
           </div>
@@ -335,7 +335,7 @@ const NotesPage = () => {
                 onDelete={handleDeleteNote}
                 onSummarize={handleSummarize}
               />
-              
+
               {/* Hover overlay with quick stats */}
               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-5 rounded-xl transition-all duration-200 pointer-events-none">
                 <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
