@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const database = require('../config/database-enhanced');
+const { authenticateToken, requireOwnershipOrAdmin } = require('../middleware/auth');
 
 // Validation schemas
 const createCourseSchema = Joi.object({
@@ -29,7 +30,7 @@ const updateCourseSchema = Joi.object({
 });
 
 // GET /api/courses - Get all courses with pagination and filtering
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -43,8 +44,8 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     const offset = (page - 1) * limit;
-    let whereClause = 'WHERE c.status = ?';
-    let params = [status];
+    let whereClause = 'WHERE c.status = ? AND c.user_id = ?';
+    let params = [status, req.user.id];
 
     // Add filters
     if (category_id) {
@@ -274,7 +275,7 @@ router.get('/:id/notes', async (req, res) => {
 });
 
 // POST /api/courses - Create a new course
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { error, value } = createCourseSchema.validate(req.body);
     
@@ -299,8 +300,8 @@ router.post('/', async (req, res) => {
       thumbnail_url
     } = value;
 
-    // For now, we'll use a default user_id (in a real app, this would come from authentication)
-    const user_id = 1;
+    // Get user_id from authenticated user
+    const user_id = req.user.id;
 
     const insertQuery = `
       INSERT INTO courses (
@@ -333,7 +334,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/courses/:id - Update a course
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
     const { error, value } = updateCourseSchema.validate(req.body);
@@ -402,7 +403,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/courses/:id - Delete a course (soft delete by updating status)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
 

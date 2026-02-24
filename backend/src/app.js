@@ -7,11 +7,13 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { generalLimiter, aiLimiter, createLimiter } = require('./middleware/rateLimiter');
 const { performanceMonitor, requestSizeLimiter, performanceHealthCheck } = require('./middleware/performance');
 
-// Import enhanced routes
-const coursesRouter = require('./routes/enhanced-courses');
-const notesRouter = require('./routes/enhanced-notes');
-const summariesRouter = require('./routes/summaries');
+// Import routes
+const authRouter = require('./routes/auth');
+const courseRouter = require('./routes/enhanced-courses');
+const noteRouter = require('./routes/enhanced-notes');
+const summaryRouter = require('./routes/summaries');
 const aiRouter = require('./routes/ai');
+const firebaseAuthRouter = require('./routes/firebase-auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -24,7 +26,7 @@ app.use(performanceMonitor);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5174',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -47,11 +49,13 @@ app.use(generalLimiter);
 // Health check endpoint
 app.get('/health', performanceHealthCheck);
 
-// API routes with enhanced endpoints
-app.use('/api/courses', createLimiter, coursesRouter);
-app.use('/api/notes', createLimiter, notesRouter);
-app.use('/api/summaries', aiLimiter, summariesRouter);
-app.use('/api/ai', aiLimiter, aiRouter);
+// API routes
+app.use('/api/auth', authRouter);
+app.use('/api/firebase-auth', firebaseAuthRouter);
+app.use('/api/courses', courseRouter);
+app.use('/api/notes', noteRouter);
+app.use('/api/summaries', summaryRouter);
+app.use('/api/ai', aiRouter);
 
 // Additional API info endpoint
 app.get('/api', (req, res) => {
@@ -60,6 +64,16 @@ app.get('/api', (req, res) => {
     message: 'StudyBuddy Enhanced API',
     version: '2.0.0',
     endpoints: {
+      auth: {
+        'POST /api/auth/register': 'Register a new user',
+        'POST /api/auth/login': 'Login user and get JWT token',
+        'GET /api/auth/profile': 'Get current user profile',
+        'PUT /api/auth/profile': 'Update user profile',
+        'PUT /api/auth/password': 'Change user password',
+        'GET /api/auth/verify': 'Verify JWT token',
+        'POST /api/auth/logout': 'Logout user',
+        'DELETE /api/auth/account': 'Deactivate user account'
+      },
       courses: {
         'GET /api/courses': 'Get all courses with pagination and filtering',
         'GET /api/courses/:id': 'Get a specific course with full details',
@@ -101,6 +115,7 @@ app.use(errorHandler);
 async function startServer() {
   try {
     await database.initialize();
+    await database.createTables();
     console.log('Database initialized successfully');
     
     app.listen(PORT, () => {

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useFirebaseAuth } from './contexts/FirebaseAuthContext';
-import FirebaseProfileDropdown from './components/FirebaseProfileDropdown';
-import databaseService from './services/databaseService';
+import { dbService } from './services/database';
+import UserDisplay from './components/UserDisplay';
 
 function WorkingSimpleApp() {
-  const { user } = useFirebaseAuth();
+  const { user, logout } = useFirebaseAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [courses, setCourses] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -16,7 +16,11 @@ function WorkingSimpleApp() {
     title: '',
     description: '',
     content: '',
-    course_id: ''
+    difficulty_level: 1,
+    course_id: null,
+    front: '',
+    back: '',
+    difficulty: 1
   });
   const [editingNote, setEditingNote] = useState(null);
   const [showStudySession, setShowStudySession] = useState(false);
@@ -30,127 +34,318 @@ function WorkingSimpleApp() {
     streak: 7
   });
 
+  // Load user data from Firestore on component mount
   useEffect(() => {
-    const loadData = async () => {
-      if (!user) {
+    if (user) {
+      loadUserData();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const loadUserData = async () => {
+    try {
+      console.log('Loading user data for:', user?.uid);
+      setLoading(true);
+      
+      if (!user?.uid) {
+        console.error('No user UID found');
+        setMessage('❌ No user authenticated');
         setLoading(false);
         return;
       }
+      
+      // Load all user data from Firestore
+      console.log('Fetching data from Firestore...');
+      const [coursesResult, notesResult, flashcardsResult] = await Promise.all([
+        dbService.getUserCourses(user.uid),
+        dbService.getUserNotes(user.uid),
+        dbService.getUserFlashcards(user.uid)
+      ]);
 
-      try {
-        setLoading(true);
-        
-        // Load user's data from Firestore
-        const [userCourses, userNotes, userFlashcards, userStats] = await Promise.all([
-          databaseService.getUserCourses(user.uid),
-          databaseService.getUserNotes(user.uid),
-          databaseService.getUserFlashcards(user.uid),
-          databaseService.getStudyStats(user.uid)
-        ]);
+      console.log('Data results:', { coursesResult, notesResult, flashcardsResult });
 
-        setCourses(userCourses);
-        setNotes(userNotes);
-        setFlashcards(userFlashcards);
-        setStudyStats(userStats);
-        
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        showMessage('❌ Error loading data. Please try again.');
-      } finally {
-        setLoading(false);
+      if (coursesResult.success) {
+        console.log('Courses loaded:', coursesResult.data);
+        setCourses(coursesResult.data);
+      } else {
+        console.error('Failed to load courses:', coursesResult.error);
       }
-    };
+      
+      if (notesResult.success) {
+        console.log('Notes loaded:', notesResult.data);
+        setNotes(notesResult.data);
+      } else {
+        console.error('Failed to load notes:', notesResult.error);
+      }
+      
+      if (flashcardsResult.success) {
+        console.log('Flashcards loaded:', flashcardsResult.data);
+        setFlashcards(flashcardsResult.data);
+      } else {
+        console.error('Failed to load flashcards:', flashcardsResult.error);
+      }
 
-    loadData();
-  }, [user]);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setMessage('❌ Error loading data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const showMessage = (msg, type = 'success') => {
-    setMessage(msg);
+  // Save course to Firestore
+  const handleCreateCourse = async (e) => {
+    e.preventDefault();
+    if (!formData.title.trim()) return;
+
+    console.log('Creating course - User:', user);
+    console.log('Creating course - FormData:', formData);
+
+    if (!user || !user.uid) {
+      console.error('No user or user UID available');
+      setMessage('❌ Please sign in to create courses');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    try {
+      setMessage('🔄 Creating course...');
+      const courseData = {
+        title: formData.title,
+        description: formData.description,
+        difficulty_level: formData.difficulty_level
+      };
+
+      console.log('Saving course data:', courseData);
+      const result = await dbService.saveCourse(user.uid, courseData);
+      console.log('Save course result:', result);
+      
+      if (result.success) {
+        // Reload courses
+        const coursesResult = await dbService.getUserCourses(user.uid);
+        if (coursesResult.success) {
+          setCourses(coursesResult.data);
+        }
+        
+        setShowCreateForm(false);
+        setFormData({ ...formData, title: '', description: '', difficulty_level: 1 });
+        setMessage('✅ Course created successfully!');
+      } else {
+        console.error('Course creation failed:', result.error);
+        setMessage('❌ Failed to create course: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error creating course:', error);
+      setMessage('❌ Error creating course: ' + error.message);
+    }
+    
     setTimeout(() => setMessage(''), 3000);
   };
 
-  const createCourse = async () => {
-    if (!user) return;
-    
-    try {
-      const courseData = {
-        title: formData.title || 'New Course',
-        description: formData.description || 'Course description',
-        difficulty_level: 1
-      };
-      
-      const newCourse = await databaseService.createCourse(user.uid, courseData);
-      setCourses([newCourse, ...courses]);
-      setShowCreateForm(false);
-      setFormData({ title: '', description: '', content: '', course_id: '' });
-      showMessage('Course created successfully!');
-    } catch (error) {
-      console.error('Error creating course:', error);
-      showMessage('❌ Error creating course. Please try again.');
-    }
-  };
+  // Save note to Firestore
+  const handleCreateNote = async (e) => {
+    e.preventDefault();
+    if (!formData.title.trim() || !formData.content.trim()) return;
 
-  const deleteCourse = async (id) => {
-    if (!user) return;
-    
-    try {
-      await databaseService.deleteCourse(user.uid, id);
-      setCourses(courses.filter(course => course.id !== id));
-      showMessage('Course deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting course:', error);
-      showMessage('❌ Error deleting course. Please try again.');
-    }
-  };
+    console.log('Creating note - User:', user);
+    console.log('Creating note - FormData:', formData);
 
-  const createNote = async () => {
-    if (!user) return;
-    
+    if (!user || !user.uid) {
+      console.error('No user or user UID available');
+      setMessage('❌ Please sign in to create notes');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
     try {
+      setMessage('🔄 Creating note...');
       const noteData = {
-        title: formData.title || 'New Note',
-        content: formData.content || 'Note content',
-        word_count: formData.content?.split(' ').length || 5
+        title: formData.title,
+        content: formData.content,
+        word_count: formData.content.split(/\s+/).length,
+        course_id: formData.course_id
       };
+
+      console.log('Saving note data:', noteData);
+      const result = await dbService.saveNote(user.uid, noteData);
+      console.log('Save note result:', result);
       
-      const newNote = await databaseService.createNote(user.uid, noteData);
-      setNotes([newNote, ...notes]);
-      setShowCreateForm(false);
-      setFormData({ title: '', description: '', content: '', course_id: '' });
-      showMessage('Note created successfully!');
+      if (result.success) {
+        // Reload notes
+        const notesResult = await dbService.getUserNotes(user.uid);
+        if (notesResult.success) {
+          setNotes(notesResult.data);
+        }
+        
+        setShowCreateForm(false);
+        setFormData({ ...formData, title: '', content: '', course_id: null });
+        setMessage('✅ Note created successfully!');
+      } else {
+        console.error('Note creation failed:', result.error);
+        setMessage('❌ Failed to create note: ' + result.error);
+      }
     } catch (error) {
       console.error('Error creating note:', error);
-      showMessage('❌ Error creating note. Please try again.');
+      setMessage('❌ Error creating note: ' + error.message);
     }
+    
+    setTimeout(() => setMessage(''), 3000);
   };
 
-  const updateNote = async () => {
-    if (!user || !editingNote) return;
-    
-    try {
-      const updateData = {
-        title: formData.title,
-        description: formData.description,
-        content: formData.content,
-        word_count: formData.content?.split(' ').length || 0
-      };
-      
-      await databaseService.updateNote(user.uid, editingNote.id, updateData);
-      
-      const updatedNotes = notes.map(note =>
-        note.id === editingNote.id
-          ? { ...note, ...updateData, updated_at: new Date().toISOString() }
-          : note
-      );
-      setNotes(updatedNotes);
-      setShowCreateForm(false);
-      setEditingNote(null);
-      setFormData({ title: '', description: '', content: '', course_id: '' });
-      showMessage('Note updated successfully!');
-    } catch (error) {
-      console.error('Error updating note:', error);
-      showMessage('❌ Error updating note. Please try again.');
+  // Save flashcard to Firestore
+  const handleCreateFlashcard = async (e) => {
+    e.preventDefault();
+    if (!formData.front.trim() || !formData.back.trim()) return;
+
+    console.log('Creating flashcard - User:', user);
+    console.log('Creating flashcard - FormData:', formData);
+
+    if (!user || !user.uid) {
+      console.error('No user or user UID available');
+      setMessage('❌ Please sign in to create flashcards');
+      setTimeout(() => setMessage(''), 3000);
+      return;
     }
+
+    try {
+      setMessage('🔄 Creating flashcard...');
+      const flashcardData = {
+        front: formData.front,
+        back: formData.back,
+        difficulty: formData.difficulty
+      };
+
+      console.log('Saving flashcard data:', flashcardData);
+      const result = await dbService.saveFlashcard(user.uid, flashcardData);
+      console.log('Save flashcard result:', result);
+      
+      if (result.success) {
+        // Reload flashcards
+        const flashcardsResult = await dbService.getUserFlashcards(user.uid);
+        if (flashcardsResult.success) {
+          setFlashcards(flashcardsResult.data);
+        }
+        
+        setShowCreateForm(false);
+        setFormData({ ...formData, front: '', back: '', difficulty: 1 });
+        setMessage('✅ Flashcard created successfully!');
+      } else {
+        console.error('Flashcard creation failed:', result.error);
+        setMessage('❌ Failed to create flashcard: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error creating flashcard:', error);
+      setMessage('❌ Error creating flashcard: ' + error.message);
+    }
+    
+    setTimeout(() => setMessage(''), 3000);
+  };
+
+  // Delete course from Firestore
+  const handleDeleteCourse = async (courseId) => {
+    if (!window.confirm('Are you sure you want to delete this course?')) return;
+
+    try {
+      setMessage('🔄 Deleting course...');
+      const result = await dbService.deleteCourse(user.uid, courseId);
+      
+      if (result.success) {
+        setCourses(courses.filter(course => course.id !== courseId));
+        setMessage('✅ Course deleted successfully!');
+      } else {
+        setMessage('❌ Failed to delete course');
+      }
+    } catch (error) {
+      setMessage('❌ Error deleting course');
+    }
+    
+    setTimeout(() => setMessage(''), 2000);
+  };
+
+  // Delete note from Firestore
+  const handleDeleteNote = async (noteId) => {
+    if (!window.confirm('Are you sure you want to delete this note?')) return;
+
+    try {
+      setMessage('🔄 Deleting note...');
+      const result = await dbService.deleteNote(user.uid, noteId);
+      
+      if (result.success) {
+        setNotes(notes.filter(note => note.id !== noteId));
+        setMessage('✅ Note deleted successfully!');
+      } else {
+        setMessage('❌ Failed to delete note');
+      }
+    } catch (error) {
+      setMessage('❌ Error deleting note');
+    }
+    
+    setTimeout(() => setMessage(''), 2000);
+  };
+
+  // Delete flashcard from Firestore
+  const handleDeleteFlashcard = async (flashcardId) => {
+    if (!window.confirm('Are you sure you want to delete this flashcard?')) return;
+
+    try {
+      setMessage('🔄 Deleting flashcard...');
+      const result = await dbService.deleteFlashcard(user.uid, flashcardId);
+      
+      if (result.success) {
+        setFlashcards(flashcards.filter(card => card.id !== flashcardId));
+        setMessage('✅ Flashcard deleted successfully!');
+      } else {
+        setMessage('❌ Failed to delete flashcard');
+      }
+    } catch (error) {
+      setMessage('❌ Error deleting flashcard');
+    }
+    
+    setTimeout(() => setMessage(''), 2000);
+  };
+
+  const showMessage = (msg, type = 'success') => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), 2000);
+  };
+
+  const createCourse = () => {
+    const newCourse = {
+      id: courses.length + 1,
+      title: formData.title || 'New Course',
+      description: formData.description || 'Course description',
+      difficulty_level: 1,
+      created_at: new Date().toISOString()
+    };
+    setCourses([...courses, newCourse]);
+    setShowCreateForm(false);
+    setFormData({ title: '', description: '', content: '', course_id: '' });
+    showMessage('Course created successfully!');
+  };
+
+  const createNote = () => {
+    const newNote = {
+      id: notes.length + 1,
+      title: formData.title || 'New Note',
+      content: formData.content || 'Note content',
+      word_count: formData.content?.split(' ').length || 5,
+      created_at: new Date().toISOString()
+    };
+    setNotes([...notes, newNote]);
+    setShowCreateForm(false);
+    setFormData({ title: '', description: '', content: '', course_id: '' });
+    showMessage('Note created successfully!');
+  };
+
+  const deleteCourse = (id) => {
+    setCourses(courses.filter(course => course.id !== id));
+    showMessage('Course deleted successfully!');
+  };
+
+  const deleteNote = (id) => {
+    setNotes(notes.filter(note => note.id !== id));
+    showMessage('Note deleted successfully!');
   };
 
   const editNote = (note) => {
@@ -164,17 +359,24 @@ function WorkingSimpleApp() {
     setShowCreateForm(true);
   };
 
-  const deleteNote = async (id) => {
-    if (!user) return;
-    
-    try {
-      await databaseService.deleteNote(user.uid, id);
-      setNotes(notes.filter(note => note.id !== id));
-      showMessage('Note deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting note:', error);
-      showMessage('❌ Error deleting note. Please try again.');
-    }
+  const updateNote = () => {
+    const updatedNotes = notes.map(note =>
+      note.id === editingNote.id
+        ? {
+            ...note,
+            title: formData.title,
+            description: formData.description,
+            content: formData.content,
+            word_count: formData.content?.split(' ').length || 0,
+            updated_at: new Date().toISOString()
+          }
+        : note
+    );
+    setNotes(updatedNotes);
+    setShowCreateForm(false);
+    setEditingNote(null);
+    setFormData({ title: '', description: '', content: '', course_id: '' });
+    showMessage('Note updated successfully!');
   };
 
   const startStudySession = () => {
@@ -197,50 +399,78 @@ function WorkingSimpleApp() {
     }
   };
 
-  const completeStudySession = async () => {
-    if (!user) return;
-    
-    try {
-      setShowStudySession(false);
-      
-      const statsUpdate = {
-        sessionsCompleted: studyStats.sessionsCompleted + 1,
-        flashcardsReviewed: studyStats.flashcardsReviewed + flashcards.length,
-        totalStudyTime: studyStats.totalStudyTime + 5, // Simulated 5 minutes
-        lastStudyDate: new Date().toISOString()
-      };
-      
-      await databaseService.updateStudyStats(user.uid, statsUpdate);
-      
-      setStudyStats(prev => ({
-        ...prev,
-        ...statsUpdate
-      }));
-      
-      showMessage('🎉 Study session completed! Great job!');
-    } catch (error) {
-      console.error('Error updating study stats:', error);
-      showMessage('❌ Error saving study progress. Please try again.');
-    }
+  const completeStudySession = () => {
+    setShowStudySession(false);
+    setStudyStats(prev => ({
+      ...prev,
+      sessionsCompleted: prev.sessionsCompleted + 1,
+      flashcardsReviewed: prev.flashcardsReviewed + flashcards.length,
+      totalStudyTime: prev.totalStudyTime + 5 // Simulated 5 minutes
+    }));
+    showMessage('🎉 Study session completed! Great job!');
   };
 
   const viewProgress = () => {
     setShowProgress(true);
   };
 
+  const generateSmartSummary = (content) => {
+    const sentences = content.split('.').filter(s => s.trim());
+    if (sentences.length <= 2) return content;
+    
+    const keyPoints = sentences.slice(0, 3).join('. ').trim();
+    return `${keyPoints}. This content covers ${sentences.length} main points about the topic.`;
+  };
+
+  const displaySummary = (summary, noteId, isFallback = false) => {
+    setMessage(`✅ ${isFallback ? 'Smart' : 'AI'} summary generated successfully!`);
+    
+    // Clear the success message after 2 seconds
+    setTimeout(() => {
+      setMessage('');
+    }, 2000);
+
+    // Show the summary in a modal - reduced delay
+    setTimeout(() => {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">🤖 ${isFallback ? 'Smart' : 'AI'} Summary</h3>
+          <div class="bg-gray-50 p-4 rounded-lg mb-4">
+            <p class="text-gray-800 leading-relaxed">${summary}</p>
+          </div>
+          <div class="flex justify-end">
+            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }, 200); // Reduced from 500ms to 200ms
+
+    // Update the note with the summary in Firestore
+    if (noteId) {
+      dbService.updateNote(user.uid, noteId, {
+        ai_summary: summary,
+        summary_generated_at: new Date().toISOString(),
+        is_fallback_summary: isFallback
+      });
+    }
+  };
+
   const generateAISummary = async (noteId = null, noteContent = null) => {
     try {
       setMessage('🤖 Generating AI summary...');
-
-      // Use the provided note content or get the first note's content
       const contentToSummarize = noteContent || (notes.length > 0 ? notes[0].content : null);
-
+      
       if (!contentToSummarize) {
         setMessage('❌ No content available for summarization');
-        setTimeout(() => setMessage(''), 3000);
+        setTimeout(() => setMessage(''), 2000);
         return;
       }
-
+      
       // Show immediate feedback that processing is happening
       const processingModal = document.createElement('div');
       processingModal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
@@ -265,100 +495,8 @@ function WorkingSimpleApp() {
     } catch (error) {
       console.error('AI Summary Error:', error);
       setMessage(`❌ AI Summary Error: ${error.message}`);
-      setTimeout(() => setMessage(''), 3000);
+      setTimeout(() => setMessage(''), 2000);
     }
-  };
-
-  const displaySummary = async (summary, noteId, isFallback = false) => {
-    setMessage(`✅ ${isFallback ? 'Smart' : 'AI'} summary generated successfully!`);
-
-    // Show the summary in a modal - reduced delay
-    setTimeout(() => {
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50';
-      modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">🤖 ${isFallback ? 'Smart' : 'AI'} Summary</h3>
-          <div class="bg-gray-50 p-4 rounded-lg mb-4">
-            <p class="text-gray-800 leading-relaxed">${summary}</p>
-          </div>
-          <div class="flex justify-end">
-            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-              Close
-            </button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-    }, 200); // Reduced from 500ms to 200ms
-
-    // Update the note with the summary in database
-    if (noteId && user) {
-      try {
-        const updateData = {
-          ai_summary: summary,
-          summary_generated_at: new Date().toISOString(),
-          is_fallback_summary: isFallback
-        };
-        
-        await databaseService.updateNote(user.uid, noteId, updateData);
-        
-        // Update local state
-        const updatedNotes = notes.map(note =>
-          note.id === noteId
-            ? { ...note, ...updateData }
-            : note
-        );
-        setNotes(updatedNotes);
-      } catch (error) {
-        console.error('Error saving AI summary:', error);
-      }
-    }
-  };
-
-  const generateSmartSummary = (text) => {
-    if (!text) return 'No content to summarize.';
-
-    // Clean the text first
-    const cleanText = text.replace(/\s+/g, ' ').trim();
-    const words = cleanText.split(' ');
-
-    if (words.length <= 30) {
-      return cleanText;
-    }
-
-    // Extract key sentences using simple heuristics
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
-
-    if (sentences.length === 0) {
-      return cleanText.substring(0, 100) + '...';
-    }
-
-    // Score sentences based on length and position
-    const scoredSentences = sentences.map((sentence, index) => {
-      const sentenceWords = sentence.trim().split(' ');
-      const lengthScore = sentenceWords.length >= 10 && sentenceWords.length <= 25 ? 1 : 0.5;
-      const positionScore = index === 0 || index === sentences.length - 1 ? 0.8 : 0.6;
-
-      return {
-        sentence: sentence.trim(),
-        score: lengthScore + positionScore
-      };
-    });
-
-    // Sort by score and take top sentences
-    scoredSentences.sort((a, b) => b.score - a.score);
-    const topSentences = scoredSentences.slice(0, Math.min(3, sentences.length));
-
-    // Create summary
-    let summary = topSentences.map(s => s.sentence).join('. ');
-
-    // Ensure it's not too long
-    if (summary.length > 150) {
-      summary = summary.substring(0, 147) + '...';
-    }
-
-    return summary + (summary.endsWith('.') ? '' : '.');
   };
 
   const renderNavigation = () => (
@@ -390,7 +528,18 @@ function WorkingSimpleApp() {
             </div>
           </div>
           <div className="flex items-center">
-            <FirebaseProfileDropdown />
+            <UserDisplay />
+            <button
+              onClick={async () => {
+                const result = await logout();
+                if (result.success) {
+                  window.location.href = '/login';
+                }
+              }}
+              className="ml-3 px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+            >
+              Sign out
+            </button>
             <span className="ml-3 text-sm text-green-600">🟢 Online</span>
           </div>
         </div>
@@ -401,7 +550,53 @@ function WorkingSimpleApp() {
   const renderDashboard = () => (
     <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
       <div className="px-4 py-6 sm:px-0">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">📊 Dashboard</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">📊 Dashboard</h1>
+          <div className="flex space-x-3">
+            <button
+              onClick={() => {
+                setCurrentPage('notes');
+                setShowCreateForm(true);
+                setFormData({
+                  title: '',
+                  content: '',
+                  course_id: null
+                });
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
+            >
+              <span className="mr-2">+</span> Add Note
+            </button>
+            <button
+              onClick={() => {
+                setCurrentPage('courses');
+                setShowCreateForm(true);
+                setFormData({
+                  title: '',
+                  description: '',
+                  difficulty_level: 1
+                });
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center"
+            >
+              <span className="mr-2">+</span> Add Course
+            </button>
+            <button
+              onClick={() => {
+                setCurrentPage('flashcards');
+                setShowCreateForm(true);
+                setFormData({
+                  front: '',
+                  back: '',
+                  difficulty: 1
+                });
+              }}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center"
+            >
+              <span className="mr-2">+</span> Add Flashcard
+            </button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white overflow-hidden shadow rounded-lg">

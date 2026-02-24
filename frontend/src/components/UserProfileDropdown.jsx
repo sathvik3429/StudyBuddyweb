@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
-import { useFirebaseAuth } from '../contexts/FirebaseAuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useFirebaseAuth } from '../contexts/FirebaseAuthContext';
 
-const FirebaseProfileDropdown = () => {
+const UserProfileDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, logout } = useFirebaseAuth();
   const navigate = useNavigate();
+  const { user, logout } = useFirebaseAuth();
 
   const handleLogout = async () => {
     const result = await logout();
     if (result.success) {
       setIsOpen(false);
-      // Navigate to login page after logout
       navigate('/login');
     }
   };
@@ -26,10 +25,14 @@ const FirebaseProfileDropdown = () => {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center space-x-2 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
       >
-        <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
-          <span className="text-white font-medium">
-            {user.email?.charAt(0).toUpperCase() || 'U'}
-          </span>
+        <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center overflow-hidden">
+          {user.photoURL ? (
+            <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-white font-medium">
+              {user.email?.charAt(0).toUpperCase() || 'U'}
+            </span>
+          )}
         </div>
         <span className="text-gray-700 font-medium">
           {user.displayName || user.email?.split('@')[0]}
@@ -77,4 +80,4 @@ const FirebaseProfileDropdown = () => {
   );
 };
 
-export default FirebaseProfileDropdown;
+export default UserProfileDropdown;

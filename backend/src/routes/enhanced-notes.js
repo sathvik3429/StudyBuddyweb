@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Joi = require('joi');
 const database = require('../config/database-enhanced');
+const { authenticateToken, requireOwnershipOrAdmin } = require('../middleware/auth');
 
 // Validation schemas
 const createNoteSchema = Joi.object({
@@ -33,7 +34,7 @@ const calculateReadingStats = (content) => {
 };
 
 // GET /api/notes - Get all notes with pagination and filtering
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -48,8 +49,8 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     const offset = (page - 1) * limit;
-    let whereClause = 'WHERE n.is_archived = ?';
-    let params = [is_archived === 'true' ? 1 : 0];
+    let whereClause = 'WHERE n.is_archived = ? AND n.user_id = ?';
+    let params = [is_archived === 'true' ? 1 : 0, req.user.id];
 
     // Add filters
     if (course_id) {
@@ -140,7 +141,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/notes/:id - Get a specific note with full details
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -209,7 +210,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/notes - Create a new note
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     const { error, value } = createNoteSchema.validate(req.body);
     
@@ -236,7 +237,8 @@ router.post('/', async (req, res) => {
     const { wordCount, readingTimeMinutes } = calculateReadingStats(content);
 
     // For now, we'll use a default user_id (in a real app, this would come from authentication)
-    const user_id = 1;
+    // Get user_id from authenticated user
+    const user_id = req.user.id;
 
     // Check if course exists
     const course = await database.get('SELECT * FROM courses WHERE id = ?', [course_id]);
@@ -300,7 +302,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/notes/:id - Update a note
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
     const { error, value } = updateNoteSchema.validate(req.body);
@@ -388,7 +390,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/notes/:id - Delete a note (soft delete by archiving)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -421,7 +423,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/notes/:id/bookmark - Toggle bookmark status
-router.post('/:id/bookmark', async (req, res) => {
+router.post('/:id/bookmark', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -460,7 +462,7 @@ router.post('/:id/bookmark', async (req, res) => {
 });
 
 // GET /api/notes/:id/versions - Get note version history
-router.get('/:id/versions', async (req, res) => {
+router.get('/:id/versions', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -494,7 +496,7 @@ router.get('/:id/versions', async (req, res) => {
 });
 
 // POST /api/notes/:id/flashcards - Create flashcards from note content
-router.post('/:id/flashcards', async (req, res) => {
+router.post('/:id/flashcards', authenticateToken, requireOwnershipOrAdmin(), async (req, res) => {
   try {
     const { id } = req.params;
     const { flashcards } = req.body; // Array of {question, answer} objects

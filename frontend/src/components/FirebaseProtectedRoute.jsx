@@ -1,19 +1,20 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
 import { useFirebaseAuth } from '../contexts/FirebaseAuthContext';
+import FirebaseLoginForm from './FirebaseLoginForm';
+import { Navigate } from 'react-router-dom';
 
 const FirebaseProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useFirebaseAuth();
+  const { user, loading } = useFirebaseAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-blue-100">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-4 border-indigo-400"></div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
 

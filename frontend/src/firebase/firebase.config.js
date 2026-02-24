@@ -1,52 +1,23 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, sendEmailVerification, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBst9qT4GwjbkBu22IWqaDU4hVfKlWRdMc",
-  authDomain: "studybuddy-abc41.firebaseapp.com",
-  projectId: "studybuddy-abc41",
-  storageBucket: "studybuddy-abc41.firebasestorage.app",
-  messagingSenderId: "10886046986",
-  appId: "1:10886046986:web:1a9070e02e101bfa5606f3"
+  apiKey: "AIzaSyBOQsHJdo28UzKVe1xXFg5eI0caIjSwT5c",
+  authDomain: "studypartner-eb836.firebaseapp.com",
+  projectId: "studypartner-eb836",
+  storageBucket: "studypartner-eb836.firebasestorage.app",
+  messagingSenderId: "135131398863",
+  appId: "1:135131398863:web:5ca2adabbc01c3f9c12dba"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
-const auth = getAuth(app);
-const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
-
-// Configure Google Provider
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-});
-
-export { 
-  auth, 
-  db,
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
-  limit,
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  googleProvider, 
-  signInWithPopup, 
-  signOut, 
-  sendEmailVerification,
-  onAuthStateChanged
-};
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
 export default app;

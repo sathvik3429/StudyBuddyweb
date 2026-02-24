@@ -2,48 +2,24 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { FirebaseAuthProvider } from './contexts/FirebaseAuthContext';
 import FirebaseProtectedRoute from './components/FirebaseProtectedRoute';
-import FirebaseLoginForm from './components/FirebaseLoginForm';
-import FirebaseRegisterForm from './components/FirebaseRegisterForm';
-import VerifyEmailPage from './components/VerifyEmailPage';
+import LoginPage from './components/LoginPage';
+import SignUpPage from './components/SignUpPage';
 import WorkingSimpleApp from './WorkingSimpleApp';
 
 function App() {
   return (
     <FirebaseAuthProvider>
       <Router>
-        <div className="App">
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<FirebaseLoginForm />} />
-            <Route path="/register" element={<FirebaseRegisterForm />} />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            
-            {/* Protected routes */}
-            <Route path="/" element={
-              <FirebaseProtectedRoute>
-                <WorkingSimpleApp />
-              </FirebaseProtectedRoute>
-            } />
-            <Route path="/dashboard" element={
-              <FirebaseProtectedRoute>
-                <WorkingSimpleApp />
-              </FirebaseProtectedRoute>
-            } />
-            <Route path="/courses" element={
-              <FirebaseProtectedRoute>
-                <WorkingSimpleApp />
-              </FirebaseProtectedRoute>
-            } />
-            <Route path="/notes" element={
-              <FirebaseProtectedRoute>
-                <WorkingSimpleApp />
-              </FirebaseProtectedRoute>
-            } />
-            
-            {/* Catch all - redirect to home */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/" element={
+            <FirebaseProtectedRoute>
+              <WorkingSimpleApp />
+            </FirebaseProtectedRoute>
+          } />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </Router>
     </FirebaseAuthProvider>
   );

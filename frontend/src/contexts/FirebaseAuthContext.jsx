@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
-  auth, 
-  googleProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendEmailVerification
-} from '../firebase/firebase.config';
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
+} from 'firebase/auth';
+import { dbService } from '../services/database';
+import { auth } from '../firebase/firebase.config';
 
 const FirebaseAuthContext = createContext();
 
@@ -23,40 +23,58 @@ export const useFirebaseAuth = () => {
 export const FirebaseAuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
-  // Listen for auth state changes
+  // Save user profile to database
+  const saveUserProfile = async (firebaseUser) => {
+    const userData = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+      photoURL: firebaseUser.photoURL,
+      emailVerified: firebaseUser.emailVerified,
+      lastLoginAt: new Date().toISOString()
+    };
+    
+    await dbService.saveUserProfile(firebaseUser.uid, userData);
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await saveUserProfile(user);
+        setUser(user);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
-      setError(null);
     });
 
     return unsubscribe;
   }, []);
 
-  // Sign up with email and password
-  const signUp = async (email, password) => {
+  const login = async (email, password) => {
     try {
-      setError(null);
-      const result = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // Send verification email
-      await sendEmailVerification(result.user);
-      
-      // Sign out the user immediately after registration
-      await signOut(auth);
-      
-      return { 
-        success: true, 
-        user: result.user,
-        emailSent: true,
-        needsVerification: true
-      };
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      return { success: true, user: result.user };
     } catch (error) {
-      let errorMessage = 'An error occurred during sign up';
-      
+      let errorMessage = 'An error occurred';
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Email or password is incorrect';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Try again later';
+      }
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  const register = async (email, password) => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      return { success: true, user: result.user };
+    } catch (error) {
+      let errorMessage = 'An error occurred';
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = 'User already exists. Please sign in';
       } else if (error.code === 'auth/weak-password') {
@@ -64,92 +82,44 @@ export const FirebaseAuthProvider = ({ children }) => {
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Invalid email address';
       }
-      
-      setError(errorMessage);
       return { success: false, error: errorMessage };
     }
   };
 
-  // Sign in with email and password
-  const signIn = async (email, password) => {
-    try {
-      setError(null);
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Check if email is verified
-      if (!result.user.emailVerified) {
-        await signOut(auth); // Sign out the user
-        return { 
-          success: false, 
-          error: 'Please verify your email before signing in. Check your inbox for the verification email.',
-          needsVerification: true,
-          email: result.user.email
-        };
-      }
-      
-      return { success: true, user: result.user };
-    } catch (error) {
-      let errorMessage = 'An error occurred during sign in';
-      
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = 'Email or password is incorrect';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'This account has been disabled';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later';
-      }
-      
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  };
-
-  // Sign in with Google
   const signInWithGoogle = async () => {
     try {
-      setError(null);
-      const result = await signInWithPopup(auth, googleProvider);
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
       return { success: true, user: result.user };
     } catch (error) {
-      let errorMessage = 'An error occurred during Google sign in';
-      
+      let errorMessage = 'An error occurred';
       if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = 'Sign in was cancelled';
+        errorMessage = 'Sign-in popup was closed';
       } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = 'Popup was blocked by the browser. Please allow popups';
+        errorMessage = 'Sign-in popup was blocked by the browser';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        errorMessage = 'Sign-in was cancelled';
       }
-      
-      setError(errorMessage);
       return { success: false, error: errorMessage };
     }
   };
 
-  // Sign out
   const logout = async () => {
     try {
       await signOut(auth);
-      setError(null);
+      return { success: true };
     } catch (error) {
-      console.error('Sign out error:', error);
-      setError('Failed to sign out');
+      return { success: false, error: error.message };
     }
   };
-
-  // Clear error
-  const clearError = () => setError(null);
 
   const value = {
     user,
     loading,
-    error,
-    signUp,
-    signIn,
+    login,
+    register,
     signInWithGoogle,
-    logout,
-    clearError,
-    isAuthenticated: !!user
+    logout
   };
 
   return (
@@ -158,5 +128,3 @@ export const FirebaseAuthProvider = ({ children }) => {
     </FirebaseAuthContext.Provider>
   );
 };
-
-export default FirebaseAuthContext;
