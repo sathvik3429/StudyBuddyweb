@@ -1,0 +1,49 @@
+{
+  "name": "studybuddy-backend",
+  "version": "1.0.0",
+  "description": "StudyBuddy Enhanced Backend - Full-Stack Learning Platform with Advanced Features",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "node --watch src/app.js",
+    "init-db": "node src/config/database-enhanced.js",
+    "init-enhanced-db": "node src/config/database-enhanced.js",
+    "test": "jest",
+    "migrate": "node scripts/migrate.js"
+  },
+  "keywords": [
+    "study",
+    "notes",
+    "education",
+    "api",
+    "learning",
+    "ai",
+    "sqlite",
+    "full-stack"
+  ],
+  "author": "StudyBuddy Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "node-cache": "^5.1.2",
+    "sqlite3": "^5.1.7",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  },
+  "directories": {
+    "test": "tests"
+  },
+  "type": "commonjs"
+}

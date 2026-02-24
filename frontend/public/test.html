@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyBuddy Test</title>
+    <script>
+        console.log('Test page loaded');
+        // Check if Tailwind is loaded
+        setTimeout(() => {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'bg-blue-500 text-white p-4';
+            document.body.appendChild(testDiv);
+            
+            const styles = window.getComputedStyle(testDiv);
+            console.log('Tailwind test - background color:', styles.backgroundColor);
+            console.log('Tailwind test - text color:', styles.color);
+        }, 1000);
+    </script>
+</head>
+<body>
+    <h1>Test Page - If you see this, basic HTML works</h1>
+    <div id="tailwind-test"></div>
+</body>
+</html>
